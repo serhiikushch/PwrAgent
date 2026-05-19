@@ -121,6 +121,12 @@ const EDITORS: KnownApplication[] = [
     binaryNames: ["nvim-qt"],
     binaryPaths: homebrewBinaryPaths("nvim-qt"),
   },
+  {
+    id: "intellijidea",
+    kind: "editor",
+    name: "IntelliJ IDEA",
+    appPaths: applicationPaths("IntelliJ IDEA.app"),
+  },
 ];
 
 const TERMINALS: KnownApplication[] = [
@@ -179,6 +185,12 @@ const TERMINALS: KnownApplication[] = [
     binaryNames: ["kitty"],
     binaryPaths: homebrewBinaryPaths("kitty"),
     terminalWorkingDirectoryArg: (targetPath) => ["--directory", targetPath],
+  },
+  {
+    id: "warp",
+    kind: "terminal",
+    name: "Warp",
+    appPaths: applicationPaths("Warp.app"),
   },
 ];
 
