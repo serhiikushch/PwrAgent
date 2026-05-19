@@ -17,9 +17,25 @@ import {
   resolveBundledApplicationCliPath,
 } from "../settings/application-discovery";
 
-const { spawnMock } = vi.hoisted(() => ({
+const { blockedAccessPaths, spawnMock } = vi.hoisted(() => ({
+  blockedAccessPaths: new Set<string>(),
   spawnMock: vi.fn(),
 }));
+
+vi.mock("node:fs/promises", async () => {
+  const actual = await vi.importActual<typeof import("node:fs/promises")>(
+    "node:fs/promises"
+  );
+  return {
+    ...actual,
+    access: vi.fn(async (candidatePath, mode) => {
+      if (blockedAccessPaths.has(String(candidatePath))) {
+        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      }
+      return actual.access(candidatePath, mode);
+    }),
+  };
+});
 
 vi.mock("node:child_process", async () => {
   const actual = await vi.importActual<typeof import("node:child_process")>(
@@ -36,6 +52,7 @@ describe("application discovery", () => {
 
   beforeEach(() => {
     tempDir = mkdtempSync(path.join(os.tmpdir(), "pwragent-application-test-"));
+    blockedAccessPaths.clear();
     spawnMock.mockImplementation(() => {
       const child = new EventEmitter() as EventEmitter & { unref: () => void };
       child.unref = vi.fn();
@@ -106,6 +123,7 @@ describe("application discovery", () => {
   });
 
   it("discovers IntelliJ IDEA from the idea launcher on PATH", async () => {
+    blockHostIntelliJDiscoveryPaths();
     const binDir = path.join(tempDir, "bin");
     const ideaPath = path.join(binDir, "idea");
     mkdirSync(binDir, { recursive: true });
@@ -127,6 +145,7 @@ describe("application discovery", () => {
   });
 
   it("opens IntelliJ IDEA source links with JetBrains line metadata", async () => {
+    blockHostIntelliJDiscoveryPaths();
     const binDir = path.join(tempDir, "bin");
     const ideaPath = path.join(binDir, "idea");
     const targetPath = path.join(tempDir, "source.kt");
@@ -191,3 +210,15 @@ describe("application discovery", () => {
     );
   });
 });
+
+function blockHostIntelliJDiscoveryPaths(): void {
+  for (const appName of ["IntelliJ IDEA.app", "IntelliJ IDEA CE.app"]) {
+    for (const appPath of [
+      path.join("/Applications", appName),
+      path.join(os.homedir(), "Applications", appName),
+    ]) {
+      blockedAccessPaths.add(appPath);
+      blockedAccessPaths.add(path.join(appPath, "Contents", "MacOS", "idea"));
+    }
+  }
+}
