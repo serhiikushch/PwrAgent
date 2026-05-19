@@ -12,6 +12,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildGhosttyAppleScriptArgs,
+  discoverDesktopApplications,
   openDesktopApplication,
   resolveBundledApplicationCliPath,
 } from "../settings/application-discovery";
@@ -101,6 +102,73 @@ describe("application discovery", () => {
     expect(capture.request).toMatchObject({ targetPath, targetLine: 12 });
     expect(capture.invocation.command).toMatch(/code$/);
     expect(capture.invocation.args).toEqual(["--goto", `${targetPath}:12`]);
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
+  it("discovers IntelliJ IDEA from the idea launcher on PATH", async () => {
+    const binDir = path.join(tempDir, "bin");
+    const ideaPath = path.join(binDir, "idea");
+    mkdirSync(binDir, { recursive: true });
+    writeFileSync(ideaPath, "#!/bin/sh\nexit 0\n", "utf8");
+    chmodSync(ideaPath, 0o755);
+
+    const snapshot = await discoverDesktopApplications({ env: { PATH: binDir } });
+
+    expect(snapshot.editors).toContainEqual(
+      expect.objectContaining({
+        id: "intellijidea",
+        kind: "editor",
+        name: "IntelliJ IDEA",
+        source: "path",
+        executablePath: ideaPath,
+        canOpenWorkspace: true,
+      })
+    );
+  });
+
+  it("opens IntelliJ IDEA source links with JetBrains line metadata", async () => {
+    const binDir = path.join(tempDir, "bin");
+    const ideaPath = path.join(binDir, "idea");
+    const targetPath = path.join(tempDir, "source.kt");
+    const capturePath = path.join(tempDir, "application-open.json");
+    mkdirSync(binDir, { recursive: true });
+    writeFileSync(ideaPath, "#!/bin/sh\nexit 0\n", "utf8");
+    chmodSync(ideaPath, 0o755);
+    writeFileSync(targetPath, "line 1\nline 2\n", "utf8");
+
+    await openDesktopApplication(
+      {
+        applicationId: "intellijidea",
+        kind: "editor",
+        targetPath,
+        targetLine: 12,
+        targetColumn: 4,
+      },
+      {
+        env: {
+          PATH: binDir,
+          PWRAGENT_E2E_APPLICATION_OPEN_CAPTURE_PATH: capturePath,
+        },
+      }
+    );
+
+    const capture = JSON.parse(readFileSync(capturePath, "utf8")) as {
+      invocation: { args: string[]; command: string };
+      request: { targetColumn?: number; targetLine?: number; targetPath?: string };
+    };
+    expect(capture.request).toMatchObject({
+      targetPath,
+      targetLine: 12,
+      targetColumn: 4,
+    });
+    expect(capture.invocation.command).toBe(ideaPath);
+    expect(capture.invocation.args).toEqual([
+      "--line",
+      "12",
+      "--column",
+      "4",
+      targetPath,
+    ]);
     expect(spawnMock).not.toHaveBeenCalled();
   });
 
