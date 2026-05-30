@@ -290,9 +290,9 @@ function SettingsSectionBody(props: {
             },
           });
         }}
-        onCodexProfileModelChange={async (codexProfileModel) => {
+        onNotificationsEnabledChange={async (notificationsEnabled) => {
           await props.settings.writeConfig({
-            general: { codexProfileModel },
+            general: { notificationsEnabled },
           });
         }}
         onClearMessagingAcknowledgment={async () => {
